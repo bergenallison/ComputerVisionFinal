@@ -18,6 +18,11 @@ import PIL.Image
 import time
 import functools
 
+print("TF Version: ", tf.__version__)
+print("Eager mode enabled: ", tf.executing_eagerly())
+print("GPU available: ", tf.config.list_physical_devices('GPU'))
+print("Tensorflow built with CUDA: ", tf.test.is_built_with_cuda())
+
 def tensor_to_image(tensor):
     tensor = tensor*255
     tensor = np.array(tensor, dtype=np.uint8)
@@ -26,7 +31,7 @@ def tensor_to_image(tensor):
         tensor = tensor[0]
     return PIL.Image.fromarray(tensor)
 
-content_path = "GSD_puppy_content.png"
+content_path = "GSD-Puppy.jpg"
 style_path = "Kanagawa_wave.jpg"
 
 def load_img(path_to_img):

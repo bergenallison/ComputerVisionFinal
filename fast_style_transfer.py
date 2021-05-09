@@ -15,7 +15,8 @@ ssl._create_default_https_context = ssl._create_unverified_context
 print("TF Version: ", tf.__version__)
 print("TF-Hub version: ", hub.__version__)
 print("Eager mode enabled: ", tf.executing_eagerly())
-print("GPU available: ", tf.test.is_gpu_available())
+print("GPU available: ", tf.config.list_physical_devices('GPU'))
+print("Tensorflow built with CUDA: ", tf.test.is_built_with_cuda())
 
 
 # @title Define image loading and visualization functions  { display-mode: "form" }
