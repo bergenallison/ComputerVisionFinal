@@ -196,12 +196,13 @@ def style_content_loss(outputs):
     loss = style_loss + content_loss
     return loss
 
-
+total_variation_weight = 30
 @tf.function()
 def train_step(image):
     with tf.GradientTape() as tape:
         outputs = extractor(image)
         loss = style_content_loss(outputs)
+        loss += total_variation_weight*tf.image.total_variation(image)
 
     grad = tape.gradient(loss, image)
     opt.apply_gradients([(grad, image)])
@@ -236,3 +237,6 @@ print("Total time: {:.1f}".format(end-start))
 
 plt.imshow(tensor_to_image(image))
 plt.show()
+
+file_name = 'stylized-image.png'
+tensor_to_image(image).save(file_name)
