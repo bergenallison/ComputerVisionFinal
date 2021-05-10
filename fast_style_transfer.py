@@ -1,6 +1,7 @@
 
 import functools
 import os
+import argparse
 
 from matplotlib import gridspec
 import matplotlib.pylab as plt
@@ -12,12 +13,26 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-print("TF Version: ", tf.__version__)
-print("TF-Hub version: ", hub.__version__)
-print("Eager mode enabled: ", tf.executing_eagerly())
-print("GPU available: ", tf.config.list_physical_devices('GPU'))
-print("Tensorflow built with CUDA: ", tf.test.is_built_with_cuda())
+def main():
 
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-c", "--content", required = True,
+                    help = "Path to the content image")
+    ap.add_argument("-i", "--style", required = True,
+                    help = "Path to the style image")
+
+    args = vars(ap.parse_args())
+    # load the query image and show it
+    content_path = args["content"]
+    style_path = args["style"]
+
+    print("TF Version: ", tf.__version__)
+    print("TF-Hub version: ", hub.__version__)
+    print("Eager mode enabled: ", tf.executing_eagerly())
+    print("GPU available: ", tf.config.list_physical_devices('GPU'))
+    print("Tensorflow built with CUDA: ", tf.test.is_built_with_cuda())
+
+    style_transfer(content_path, style_path)
 
 # @title Define image loading and visualization functions  { display-mode: "form" }
 
@@ -69,55 +84,36 @@ def show_n(images, titles=('',)):
         plt.title(titles[i] if len(titles) > i else '')
     plt.show()
 
+def style_transfer(content_image_path, style_image_path):
 
-# @title Load example images  { display-mode: "form" }
+    output_image_size = 384  # @param {type:"integer"}
 
-content_image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Golden_Gate_Bridge_from_Battery_Spencer.jpg/640px-Golden_Gate_Bridge_from_Battery_Spencer.jpg'  # @param {type:"string"}
-style_image_url = 'https://upload.wikimedia.org/wikipedia/commons/0/0a/The_Great_Wave_off_Kanagawa.jpg'  # @param {type:"string"}
-output_image_size = 384  # @param {type:"integer"}
+    # The content image size can be arbitrary.
+    content_img_size = (output_image_size, output_image_size)
+    # The style prediction model was trained with image size 256 and it's the
+    # recommended image size for the style image (though, other sizes work as
+    # well but will lead to different results).
+    style_img_size = (256, 256)  # Recommended to keep it at 256.
 
-content_image_path = "Bergen_sample_content.jpg"
-style_image_path = "style-images/Jackson-Polluck.jpeg"
+    content_image = load_image_path(content_image_path, content_img_size)
+    style_image = load_image_path(style_image_path, style_img_size)
+    style_image = tf.nn.avg_pool(style_image, ksize=[3,3], strides=[1,1], padding='SAME')
 
-# The content image size can be arbitrary.
-content_img_size = (output_image_size, output_image_size)
-# The style prediction model was trained with image size 256 and it's the
-# recommended image size for the style image (though, other sizes work as
-# well but will lead to different results).
-style_img_size = (256, 256)  # Recommended to keep it at 256.
+    #show_n([content_image, style_image], ['Content image', 'Style image'])
 
-#content_image = load_image_url(content_image_url, content_img_size)
-#style_image = load_image_url(style_image_url, style_img_size)
-content_image = load_image_path(content_image_path, content_img_size)
-#print(content_image.shape)
-style_image = load_image_path(style_image_path, style_img_size)
-#print(style_image.shape)
-style_image = tf.nn.avg_pool(style_image, ksize=[3,3], strides=[1,1], padding='SAME')
-#print(style_image.shape)
+    # Load TF-Hub module.
 
-#content_image = tf.nn.avg_pool(content_image, ksize=[3,3], strides=[1,1], padding='SAME')
+    hub_handle = 'https://tfhub.dev/google/magenta/arbitrary-image-stylization-v1-256/2'
+    hub_module = hub.load(hub_handle)
 
-#print()
+    # Stylize content image with given style image.
+    # This is pretty fast within a few milliseconds on a GPU.
 
-show_n([content_image, style_image], ['Content image', 'Style image'])
+    outputs = hub_module(tf.constant(content_image), tf.constant(style_image))
+    stylized_image = outputs[0]
 
+    # Visualize input images and the generated stylized image.
 
-# Load TF-Hub module.
+    show_n([content_image, style_image, stylized_image], titles=['Original content image', 'Style image', 'Stylized image'])
 
-hub_handle = 'https://tfhub.dev/google/magenta/arbitrary-image-stylization-v1-256/2'
-hub_module = hub.load(hub_handle)
-
-# Stylize content image with given style image.
-# This is pretty fast within a few milliseconds on a GPU.
-#print(content_image.shape)
-
-#tf.reshape(content_image, [1, output_image_size, output_image_size, 3])
-#print(content_image.shape)
-#print(style_image.shape)
-outputs = hub_module(tf.constant(content_image), tf.constant(style_image))
-stylized_image = outputs[0]
-
-# Visualize input images and the generated stylized image.
-
-show_n([content_image, style_image, stylized_image], titles=['Original content image', 'Style image', 'Stylized image'])
-
+main()
