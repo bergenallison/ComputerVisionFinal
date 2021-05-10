@@ -77,7 +77,7 @@ style_image_url = 'https://upload.wikimedia.org/wikipedia/commons/0/0a/The_Great
 output_image_size = 384  # @param {type:"integer"}
 
 content_image_path = "Bergen_sample_content.jpg"
-style_image_path = "Jackson-Polluck.jpeg"
+style_image_path = "style-images/Jackson-Polluck.jpeg"
 
 # The content image size can be arbitrary.
 content_img_size = (output_image_size, output_image_size)

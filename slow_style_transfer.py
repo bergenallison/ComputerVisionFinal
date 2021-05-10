@@ -31,8 +31,8 @@ def tensor_to_image(tensor):
         tensor = tensor[0]
     return PIL.Image.fromarray(tensor)
 
-content_path = "GSD-Puppy.jpg"
-style_path = "Kanagawa_wave.jpg"
+content_path = "content-images/GSD-Puppy.jpg"
+style_path = "style-images/Kanagawa_wave.jpg"
 
 def load_img(path_to_img):
     max_dim = 512
