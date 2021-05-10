@@ -17,11 +17,31 @@ import numpy as np
 import PIL.Image
 import time
 import functools
+import argparse
 
-print("TF Version: ", tf.__version__)
-print("Eager mode enabled: ", tf.executing_eagerly())
-print("GPU available: ", tf.config.list_physical_devices('GPU'))
-print("Tensorflow built with CUDA: ", tf.test.is_built_with_cuda())
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-c", "--content", required = True,
+                    help = "Path to the content image")
+    ap.add_argument("-i", "--style", required = True,
+                    help = "Path to the style image")
+    ap.add_argument("-e", "--epochs", required = True,
+                    help = "Number of epochs of style transfer to run")
+    ap.add_argument("-s", "--steps", required = True,
+                    help = "Number of steps per epoch of style transfer")
+
+    args = vars(ap.parse_args())
+    content_path = args["content"]
+    style_path = args["style"]
+    epochs = int(args["epochs"])
+    steps = int(args["steps"])
+
+    print("TF Version: ", tf.__version__)
+    print("Eager mode enabled: ", tf.executing_eagerly())
+    print("GPU available: ", tf.config.list_physical_devices('GPU'))
+    print("Tensorflow built with CUDA: ", tf.test.is_built_with_cuda())
+
+    style_transfer(content_path, style_path, epochs, steps)
 
 def tensor_to_image(tensor):
     tensor = tensor*255
@@ -30,9 +50,6 @@ def tensor_to_image(tensor):
         assert tensor.shape[0] == 1
         tensor = tensor[0]
     return PIL.Image.fromarray(tensor)
-
-content_path = "content-images/GSD-Puppy.jpg"
-style_path = "style-images/Kanagawa_wave.jpg"
 
 def load_img(path_to_img):
     max_dim = 512
@@ -59,41 +76,6 @@ def imshow(image, title=None):
         plt.title(title)
     plt.show()
 
-content_image = load_img(content_path)
-style_image = load_img(style_path)
-
-plt.subplot(1, 2, 1)
-imshow(content_image, 'Content Image')
-
-plt.subplot(1, 2, 2)
-imshow(style_image, 'Style Image')
-
-x = tf.keras.applications.vgg19.preprocess_input(content_image*255)
-x = tf.image.resize(x, (224, 224))
-vgg = tf.keras.applications.VGG19(include_top=True, weights='imagenet')
-prediction_probabilities = vgg(x)
-print(prediction_probabilities.shape)
-
-predicted_top_5 = tf.keras.applications.vgg19.decode_predictions(prediction_probabilities.numpy())[0]
-print([(class_name, prob) for (number, class_name, prob) in predicted_top_5])
-
-vgg = tf.keras.applications.VGG19(include_top=False, weights='imagenet')
-
-print()
-for layer in vgg.layers:
-    print(layer.name)
-
-content_layers = ['block5_conv2']
-
-style_layers = ['block1_conv1',
-                'block2_conv1',
-                'block3_conv1',
-                'block4_conv1',
-                'block5_conv1']
-
-num_content_layers = len(content_layers)
-num_style_layers = len(style_layers)
-
 def vgg_layers(layer_names):
     """ Creates a vgg model that returns a list of intermediate output values."""
     # Load our model. Load pretrained VGG, trained on imagenet data
@@ -104,18 +86,6 @@ def vgg_layers(layer_names):
 
     model = tf.keras.Model([vgg.input], outputs)
     return model
-
-style_extractor = vgg_layers(style_layers)
-style_outputs = style_extractor(style_image*255)
-
-#Look at the statistics of each layer's output
-for name, output in zip(style_layers, style_outputs):
-    print(name)
-    print("  shape: ", output.numpy().shape)
-    print("  min: ", output.numpy().min())
-    print("  max: ", output.numpy().max())
-    print("  mean: ", output.numpy().mean())
-    print()
 
 def gram_matrix(input_tensor):
     result = tf.linalg.einsum('bijc,bijd->bcd', input_tensor, input_tensor)
@@ -154,41 +124,10 @@ class StyleContentModel(tf.keras.models.Model):
 
         return {'content': content_dict, 'style': style_dict}
 
-extractor = StyleContentModel(style_layers, content_layers)
-
-results = extractor(tf.constant(content_image))
-
-print('Styles:')
-for name, output in sorted(results['style'].items()):
-    print("  ", name)
-    print("    shape: ", output.numpy().shape)
-    print("    min: ", output.numpy().min())
-    print("    max: ", output.numpy().max())
-    print("    mean: ", output.numpy().mean())
-    print()
-
-print("Contents:")
-for name, output in sorted(results['content'].items()):
-    print("  ", name)
-    print("    shape: ", output.numpy().shape)
-    print("    min: ", output.numpy().min())
-    print("    max: ", output.numpy().max())
-    print("    mean: ", output.numpy().mean())
-
-style_targets = extractor(style_image)['style']
-content_targets = extractor(content_image)['content']
-
-image = tf.Variable(content_image)
-
 def clip_0_1(image):
     return tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=1.0)
 
-opt = tf.optimizers.Adam(learning_rate=0.02, beta_1=0.99, epsilon=1e-1)
-
-style_weight=1e-2
-content_weight=1e4
-
-def style_content_loss(outputs):
+def style_content_loss(outputs, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers):
     style_outputs = outputs['style']
     content_outputs = outputs['content']
     style_loss = tf.add_n([tf.reduce_mean((style_outputs[name]-style_targets[name])**2)
@@ -201,47 +140,127 @@ def style_content_loss(outputs):
     loss = style_loss + content_loss
     return loss
 
-total_variation_weight = 30
 @tf.function()
-def train_step(image):
+def train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers):
     with tf.GradientTape() as tape:
         outputs = extractor(image)
-        loss = style_content_loss(outputs)
+        loss = style_content_loss(outputs, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
+
         loss += total_variation_weight*tf.image.total_variation(image)
 
     grad = tape.gradient(loss, image)
     opt.apply_gradients([(grad, image)])
     image.assign(clip_0_1(image))
 
-train_step(image)
-train_step(image)
-train_step(image)
-plt.imshow(tensor_to_image(image))
-plt.show()
+def style_transfer(content_path, style_path, epochs, steps_per_epoch):
 
-import time
-start = time.time()
+    content_image = load_img(content_path)
+    style_image = load_img(style_path)
 
-epochs = 10
-steps_per_epoch = 100
+    plt.subplot(1, 2, 1)
+    imshow(content_image, 'Content Image')
 
-step = 0
-for n in range(epochs):
-    for m in range(steps_per_epoch):
-        step += 1
-        train_step(image)
-        print(".", end='')
-    display.clear_output(wait=True)
-    display.display(tensor_to_image(image))
+    plt.subplot(1, 2, 2)
+    imshow(style_image, 'Style Image')
+
+    x = tf.keras.applications.vgg19.preprocess_input(content_image*255)
+    x = tf.image.resize(x, (224, 224))
+    vgg = tf.keras.applications.VGG19(include_top=True, weights='imagenet')
+    prediction_probabilities = vgg(x)
+    print(prediction_probabilities.shape)
+
+    predicted_top_5 = tf.keras.applications.vgg19.decode_predictions(prediction_probabilities.numpy())[0]
+    print([(class_name, prob) for (number, class_name, prob) in predicted_top_5])
+
+    vgg = tf.keras.applications.VGG19(include_top=False, weights='imagenet')
+
+    print()
+    for layer in vgg.layers:
+        print(layer.name)
+
+    content_layers = ['block5_conv2']
+
+    style_layers = ['block1_conv1',
+                    'block2_conv1',
+                    'block3_conv1',
+                    'block4_conv1',
+                    'block5_conv1']
+
+    num_content_layers = len(content_layers)
+    num_style_layers = len(style_layers)
+
+    style_extractor = vgg_layers(style_layers)
+    style_outputs = style_extractor(style_image*255)
+
+    #Look at the statistics of each layer's output
+    for name, output in zip(style_layers, style_outputs):
+        print(name)
+        print("  shape: ", output.numpy().shape)
+        print("  min: ", output.numpy().min())
+        print("  max: ", output.numpy().max())
+        print("  mean: ", output.numpy().mean())
+        print()
+
+    extractor = StyleContentModel(style_layers, content_layers)
+
+    results = extractor(tf.constant(content_image))
+
+    print('Styles:')
+    for name, output in sorted(results['style'].items()):
+        print("  ", name)
+        print("    shape: ", output.numpy().shape)
+        print("    min: ", output.numpy().min())
+        print("    max: ", output.numpy().max())
+        print("    mean: ", output.numpy().mean())
+        print()
+
+    print("Contents:")
+    for name, output in sorted(results['content'].items()):
+        print("  ", name)
+        print("    shape: ", output.numpy().shape)
+        print("    min: ", output.numpy().min())
+        print("    max: ", output.numpy().max())
+        print("    mean: ", output.numpy().mean())
+
+    style_targets = extractor(style_image)['style']
+    content_targets = extractor(content_image)['content']
+
+    image = tf.Variable(content_image)
+
+    opt = tf.optimizers.Adam(learning_rate=0.02, beta_1=0.99, epsilon=1e-1)
+
+    style_weight=1e-2
+    content_weight=1e4
+
+    total_variation_weight = 30
+
+    train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
+    train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
+    train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
     plt.imshow(tensor_to_image(image))
     plt.show()
-    print("Train step: {}".format(step))
 
-end = time.time()
-print("Total time: {:.1f}".format(end-start))
+    start = time.time()
 
-plt.imshow(tensor_to_image(image))
-plt.show()
+    step = 0
+    for n in range(epochs):
+        for m in range(steps_per_epoch):
+            step += 1
+            train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
+            print(".", end='')
+        display.clear_output(wait=True)
+        display.display(tensor_to_image(image))
+        plt.imshow(tensor_to_image(image))
+        plt.show()
+        print("Train step: {}".format(step))
 
-file_name = 'stylized-image.png'
-tensor_to_image(image).save(file_name)
+    end = time.time()
+    print("Total time: {:.1f}".format(end-start))
+
+    plt.imshow(tensor_to_image(image))
+    plt.show()
+
+    file_name = 'stylized-image.png'
+    tensor_to_image(image).save(file_name)
+
+main()
