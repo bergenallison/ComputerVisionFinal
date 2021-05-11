@@ -7,6 +7,7 @@ import time
 from matplotlib import gridspec
 import matplotlib.pylab as plt
 import numpy as np
+import PIL.Image
 import tensorflow as tf
 import tensorflow_hub as hub
 
@@ -85,6 +86,14 @@ def show_n(images, titles=('',)):
         plt.title(titles[i] if len(titles) > i else '')
     plt.show()
 
+def tensor_to_image(tensor):
+    tensor = tensor*255
+    tensor = np.array(tensor, dtype=np.uint8)
+    if np.ndim(tensor)>3:
+        assert tensor.shape[0] == 1
+        tensor = tensor[0]
+    return PIL.Image.fromarray(tensor)
+
 def style_transfer(content_image_path, style_image_path):
 
     output_image_size = 384  # @param {type:"integer"}
@@ -103,7 +112,6 @@ def style_transfer(content_image_path, style_image_path):
     show_n([content_image, style_image], ['Content image', 'Style image'])
 
     # Load TF-Hub module.
-
     hub_handle = 'https://tfhub.dev/google/magenta/arbitrary-image-stylization-v1-256/2'
     hub_module = hub.load(hub_handle)
 
@@ -117,7 +125,7 @@ def style_transfer(content_image_path, style_image_path):
 
     show_n([content_image, style_image, stylized_image], titles=['Original content image', 'Style image', 'Stylized image'])
 
-    file_name = 'stylized-image-slow-' + time.strftime("%m-%d-%H-%M-%S") + '.jpg'
-    stylized_image.save('outputs/' + file_name)
+    file_name = 'stylized-image-fast-' + time.strftime("%m-%d-%H-%M-%S") + '.jpg'
+    tensor_to_image(stylized_image).save('outputs/' + file_name)
 
 main()
