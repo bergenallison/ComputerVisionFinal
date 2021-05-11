@@ -2,6 +2,7 @@
 import functools
 import os
 import argparse
+import time
 
 from matplotlib import gridspec
 import matplotlib.pylab as plt
@@ -99,7 +100,7 @@ def style_transfer(content_image_path, style_image_path):
     style_image = load_image_path(style_image_path, style_img_size)
     style_image = tf.nn.avg_pool(style_image, ksize=[3,3], strides=[1,1], padding='SAME')
 
-    #show_n([content_image, style_image], ['Content image', 'Style image'])
+    show_n([content_image, style_image], ['Content image', 'Style image'])
 
     # Load TF-Hub module.
 
@@ -115,5 +116,8 @@ def style_transfer(content_image_path, style_image_path):
     # Visualize input images and the generated stylized image.
 
     show_n([content_image, style_image, stylized_image], titles=['Original content image', 'Style image', 'Stylized image'])
+
+    file_name = 'stylized-image-slow-' + time.strftime("%m-%d-%H-%M-%S") + '.jpg'
+    stylized_image.save('outputs/' + file_name)
 
 main()

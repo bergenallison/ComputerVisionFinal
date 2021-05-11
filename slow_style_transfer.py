@@ -234,11 +234,13 @@ def style_transfer(content_path, style_path, epochs, steps_per_epoch):
 
     total_variation_weight = 30
 
+    """
     train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
     train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
     train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
     plt.imshow(tensor_to_image(image))
     plt.show()
+    """
 
     start = time.time()
 
@@ -247,9 +249,9 @@ def style_transfer(content_path, style_path, epochs, steps_per_epoch):
         for m in range(steps_per_epoch):
             step += 1
             train_step(image, extractor, opt, total_variation_weight, style_targets, style_weight, num_style_layers, content_targets, content_weight, num_content_layers)
-            print(".", end='')
-        display.clear_output(wait=True)
-        display.display(tensor_to_image(image))
+            print(".", end='', flush = True)
+        #display.clear_output(wait=True)
+        #display.display(tensor_to_image(image))
         plt.imshow(tensor_to_image(image))
         plt.show()
         print("Train step: {}".format(step))
@@ -260,7 +262,7 @@ def style_transfer(content_path, style_path, epochs, steps_per_epoch):
     plt.imshow(tensor_to_image(image))
     plt.show()
 
-    file_name = 'stylized-image.png'
-    tensor_to_image(image).save(file_name)
+    file_name = 'stylized-image-slow-' + time.strftime("%m-%d-%H-%M-%S") + '.jpg'
+    tensor_to_image(image).save('outputs/' + file_name)
 
 main()
